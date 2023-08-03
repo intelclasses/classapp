@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Quiz Program</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
+    />
+    <script src="https://www.gstatic.com/firebasejs/8.8.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.8.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.8.1/firebase-auth.js"></script>
+    <style>
+      #quiz {
+        margin-bottom: 60px;
+      }
+      #quiz {
+        margin-bottom: 60px;
+      }
+
+      .options-container {
+        display: flex;
+        flex-direction: column; /* Display options vertically */
+      }
+
+      .options-container label {
+        display: block; /* Each option as a block element */
+        margin-bottom: 5px;
+      }
+
+      .options-container input[type="radio"] {
+        display: none; /* Hide the radio button */
+      }
+
+      .options-container label {
+        cursor: pointer; /* Show pointer cursor on options */
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+
+      /* Style for the Next button */
+      #nextBtn {
+        background-color: #007bff; /* Bluish color */
+        color: #fff; /* White text color */
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      #nextBtn:hover {
+        background-color: #0056b3; /* Darker bluish color on hover */
+      }
+
+      #nextBtn:disabled {
+        background-color: #ccc; /* Greyed out when disabled */
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Quiz Program</h1>
+    <div id="quiz"></div>
+
+    <script>
+      const firebaseConfig = {
+        apiKey: "AIzaSyA88fPkOvcI4QA9qD3ROpk-ay-V6ibQQlc",
+        authDomain: "my-application-7fd40.firebaseapp.com",
+        projectId: "my-application-7fd40",
+        storageBucket: "my-application-7fd40.appspot.com",
+        messagingSenderId: "269589994279",
+        appId: "1:269589994279:web:4c617a622c328a1224e702",
+        measurementId: "G-D8MD1J28GR",
+      };
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+
+      //auth state check - login or not
+
+      firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+          var uid = user.uid;
+
+          if (user.isAnonymous) {
+            location.href = "index.html";
+          } else {
+            email = user.email;
+            console.log(email);
+          }
+
+          // ...
+        } else {
+          // User is signed out
+          // ...
+          location.href = "index.html";
+        }
+      });
+
+      //auth check completed
+
+      //firebase components
+      const firestore = firebase.firestore();
+
+      let questionsData; // Global variable to store quiz data
+      const quizContainer = document.getElementById("quiz");
+      var lastAddedWrongIndex = -1;
+      let questions = [];
+      let wrongQuestionsArray = [];
+
+      const id = localStorage.getItem("id");
+
+      firestore
+        .collection("intel")
+        .doc("questions")
+        .collection("all_questions")
+        .where("topic", "==", id)
+        .get()
+        .then((querySnapshot) => {
+          querySnapshot.forEach((doc) => {
+            let currentQuestion = {};
+            var data = doc.data();
+            // doc.data() is never undefined for query doc snapshots
+            // console.log(doc.id, " => ", doc.data().options[0]);
+            currentQuestion.question = data.question.trim();
+            currentQuestion.options = [];
+            for (var i = 0; i < 4; i++) {
+              currentQuestion.options.push(data.options[i]);
+            }
+            currentQuestion.answer = data.answer.trim();
+            currentQuestion.docId = data.docId;
+            currentQuestion.topic = data.topic;
+            currentQuestion.explanation = data.explanation;
+            questions.push(currentQuestion);
+          });
+
+          createQuiz(questions);
+        })
+        .catch((error) => {
+          console.log("Error getting documents: ", error);
+        });
+
+      // Fetch the text file
+
+      // Parse the quiz data from text file
+
+      // Create the quiz
+      function createQuiz(questions) {
+        shuffleArray(questions);
+
+        let quizHTML = "";
+
+        questions.forEach((question, index) => {
+          let questionHTML = `<div>
+    <h2>Question ${index + 1}</h2>
+    <p>${question.question}</p>`;
+
+          // Check if the question starts with "https://" and if so, display it as an image
+          if (question.question.trim().startsWith("https://")) {
+            questionHTML += `<img src="${question.question.trim()}" alt="Question Image">`;
+          }
+
+          questionHTML += `<div class="options-container">`;
+
+          // Iterate through each option and check if it starts with "https://"
+          question.options.forEach((option, optionIndex) => {
+            var n = optionIndex + 1;
+            var optionnum = "option" + n;
+            // Check if the option starts with "https://" and if so, display it as an image
+            if (option.trim().startsWith("https://")) {
+              questionHTML += `
+        <label>
+          <input type="radio" class="" name="question${index}" id="${
+                index + "" + optionnum
+              }" value="${option}" onclick="checkAnswer(${index}, '${option}', '${optionnum}')">
+          <img src="${option.trim()}" alt="Option Image" style="max-width: 100%; max-height: 100px;">
+        </label>`;
+            } else {
+              questionHTML += `
+        <label>
+          <input type="radio" class="" name="question${index}" id="${
+                index + "" + optionnum
+              }" value="${option}" onclick="checkAnswer(${index}, '${option}', '${optionnum}')">
+          ${option}
+        </label>`;
+            }
+          });
+
+          questionHTML += `<p id="feedback${index}"></p>`;
+
+          if (question.explanation.trim().startsWith("https://")) {
+            questionHTML += `<img src="${question.explanation.trim()}" alt="Explanation Image" style="max-width: 100%; max-height: 500px; display: none;" id="explanation${index}">`;
+          } else {
+            questionHTML += `<p id="explanation${index}" style="display: none;">${question.explanation}</p>`;
+          }
+
+          questionHTML += `</div></div>`;
+
+          quizHTML += questionHTML;
+        });
+
+        quizContainer.innerHTML = quizHTML;
+      }
+
+      // Check the answer
+      function checkAnswer(questionIndex, selectedOption, optionNum) {
+        console.log(questionIndex + " " + selectedOption + " " + optionNum);
+        const question = questions[questionIndex];
+
+        const feedbackElement = document.getElementById(
+          `feedback${questionIndex}`
+        );
+
+        const options = document.querySelectorAll(
+          `input[name="question${questionIndex}"]`
+        );
+        options.forEach((option) => {
+          option.parentElement.style.backgroundColor = "";
+        });
+
+        // Change the background color of the selected option to red
+        // const selectedOptionElement = document.querySelector(
+        //   `input[value="${selectedOption}"]`
+        // );
+        const selectedOptionElement = document.querySelector(
+          `input[id="${questionIndex + "" + optionNum}"]`
+        );
+
+        // console.log(question.answer + " " + selectedOption);
+
+        if (selectedOption === question.answer) {
+          feedbackElement.textContent = "Correct!";
+          feedbackElement.style.color = "green";
+          selectedOptionElement.parentElement.style.backgroundColor = "green";
+        } else {
+          feedbackElement.textContent = "Wrong!";
+          feedbackElement.style.color = "red";
+          selectedOptionElement.parentElement.style.backgroundColor = "red";
+        }
+
+        const explanationElement = document.getElementById(
+          `explanation${questionIndex}`
+        );
+        explanationElement.style.display = "block";
+
+        // document.getElementById(
+        //   questionIndex + "" + optionNum
+        // ).style.backgroundColor = "green";
+      }
+
+      function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+      }
+    </script>
+  </body>
+</html>
